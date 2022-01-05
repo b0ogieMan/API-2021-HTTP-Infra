@@ -1,15 +1,8 @@
 FROM php:8.0-apache
 
-RUN cd .. && mkdir lab-infra.heig
+RUN apt-get update && apt-get install -y vim
 
-COPY content/lab-infra.heig/ /var/www/lab-infra.heig/
-COPY conf/lab-infra.heig.conf /etc/apache2/sites-available/
-
-RUN chown -R $USER:$USER /var/www/lab-infra.heig
-RUN chmod -R 755 /var/www/lab-infra.heig
-
-RUN a2ensite lab-infra.heig.conf
-RUN a2dissite 000-default.conf
+COPY content/ /var/www/html/
 
 EXPOSE 8080
 
