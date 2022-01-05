@@ -5,4 +5,6 @@ RUN apt-get update && \
 
 COPY content/ /opt/app
 
+EXPOSE 3000
+
 CMD ["node", "/opt/app/index.js"]
