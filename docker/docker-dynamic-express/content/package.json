@@ -1,5 +1,5 @@
 {
-  "name": "employees",
+  "name": "flights",
   "version": "0.1.0",
   "description": "Step 2 - lab infra_HTTP",
   "main": "index.js",
