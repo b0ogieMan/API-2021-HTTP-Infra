@@ -37,5 +37,8 @@ Celle-ci démarrera une conteneur en mode détaché *-d* accessible sur le port 
 
 L'argument *-p* permet de mapper le port 80 de notre serveur avec le port 8080 de la machine virtuelle Docker. De ce fait, nous pourrons accéder au site web directement depuis le port 8080 comme si nous étions sur le port 80 du serveur apache.
 
-Maintenant, l'accès au site est possible en se rendant sur l'adresse `localhost:8080`.
+### Résultat
+
+En se rendant sur le navigateur web à l'adresse `localhost:8080`, le site web s'affiche correctement.
+![image du site web](figures/step1-check-static-OK.png)
 

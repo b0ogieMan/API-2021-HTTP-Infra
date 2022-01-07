@@ -94,7 +94,11 @@ Après la construction de l'image, il est possible de démarrer un conteneur bas
 docker run -d -p 3000:3000 --name express_dynamic infra/dynamic
 ```
 
-Une fois encore, on peut vérifier le comportement en se rendant sur l'adresse `localhost:3000`.
+### Résultats
+
+On peut vérifier le comportement en se rendant sur l'adresse `localhost:3000`.
 On y reçoit bien la charge utile JSON qui est générée aléatoirement et de taille différente à chaque rafraîchissement.
+
+![image express dynamic](figures/step2-check-dynamic-OK.png)
 
 
