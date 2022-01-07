@@ -23,6 +23,8 @@ services:
   labels: 
    - traefik.enable=true
    - traefik.http.routers.ajax.rule=PathPrefix(`/`)
+   - traefik.http.services.ajax.loadbalancer.sticky=true
+   - traefik.http.services.ajax.loadbalancer.sticky.cookie.name=AjaxSticky
    
  express: 
   image: "infra/express"
@@ -34,5 +36,7 @@ services:
    - traefik.http.routers.express.rule=PathPrefix(`/api/json/`)
    - traefik.http.routers.express.middlewares=express-replacepath
    - traefik.http.middlewares.express-replacepath.replacepath.path=/
+   - traefik.http.services.express.loadbalancer.sticky=true
+   - traefik.http.services.express.loadbalancer.sticky.cookie.name=ExpressSticky
 
 
