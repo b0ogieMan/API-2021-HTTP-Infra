@@ -71,6 +71,6 @@ Maintenant si l'on tente d'accéder à `http://infra.lab:8080` sur le navigateur
 
 Et si l'on met plutôt `http://infra.lab:8080/api/json/`, on voit bien les données JSON !
 
-![image des données JSON](figures/step3-check-rp2.OK.png)
+![image des données JSON](figures/step3-check-rp2-OK.png)
 Inconvénient : ip statique, respecter l'ordre.
 
