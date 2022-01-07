@@ -62,10 +62,15 @@ Il faut également modifier le fichier hosts (configuration DNS) situé dans `/e
 ```
 127.0.0.1 infra.lab
 ```
-Maintenant si l'on tente d'accéder à `http://infra.lab:8080` sur le navigateur, le site web s'affiche. Et si l'on met plutôt `http://infra.lab:8080/api/json/`, on voit bien les données JSON !
 
+### Résultats
+
+Maintenant si l'on tente d'accéder à `http://infra.lab:8080` sur le navigateur, le site web s'affiche. 
+
+![image du site statique](figures/step3-check-rp1-OK.png)
+
+Et si l'on met plutôt `http://infra.lab:8080/api/json/`, on voit bien les données JSON !
+
+![image des données JSON](figures/step3-check-rp2-OK.png)
 Inconvénient : ip statique, respecter l'ordre.
-
-
-
 
