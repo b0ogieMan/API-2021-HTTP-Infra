@@ -31,7 +31,7 @@ docker run -p 8080:80 infra/static
 ### Résultat
 Maintenant, il peut être accédé via [localhost:8080](http://localhost:8080). 
 
-![résultat_step1](step1-static/figures/step1-check-static-OK.png)
+![résultats_step1_OK](step1-static/figures/step1-check-static-OK.png)
 
 ## Etape 2: Serveur HTTP dynamique avec fastify.js
 
@@ -131,7 +131,9 @@ ENTRYPOINT [ "node", "server.js" ]
 ```
 
 ### Résultat
-![resultat_step2_OK](figures/step2-OK.gif)
+À chaque rafraîchissement de [localhost:3000](localhost:3000), les données affichées sont bien différentes.
+
+![résultats_step2_OK](figures/step2-OK.gif)
 
 
 ## Etape 3: Reverse proxy avec apache (configuration statique)
@@ -156,7 +158,7 @@ Le fichier de configuration *001-reverse-proxy.conf* permet de configurer le rou
 </VirtualHost>
 ```
 
-Si l'URL ne correspond pas à celles spécifiées précédèment, le serveur ne renvoit rien.
+Si l'URL ne correspond pas à celles spécifiées précédemment, le serveur ne renvoit rien.
 ```
 <VirtualHost *:80>
 </VirtualHost>
@@ -183,9 +185,12 @@ services:
     environment:
       - PORT=3000
 ```
-
+### Résultats
+[résultats_step3_OK](figures/step3-OK.gif)
 
 ## Etape 4: Requêtes AJAX avec JQuery
+
+Le code html a été modifié et une classe a été ajoutée à la balise *<p>*. Cette classe permettra de sélectionner le paragraphe et en changer les propriétés grâce au script JS.
 
 ```html
 	<header id="fh5co-header" class="fh5co-cover js-fullheight" role="banner">
@@ -207,6 +212,8 @@ services:
 		</div>
 	</header>
 ```
+
+À la fin du fichier `index.html`, il faut bien évidemment indiquer où aller chercher le script.
 
 ```html
 	<!-- Custom script to load flights information -->
@@ -262,6 +269,8 @@ services:
       - PORT=3000
 ```
 
+### Résultats
+[résultats_step4_OK](figures/step4-OK.gif)
 
 ## Etape 5: Configuration dynamique du reverse proxy
 Les fonctionnalités demandées à cette étape ont déjà été implémentées à l'étape 3.
