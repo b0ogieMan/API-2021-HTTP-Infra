@@ -2,7 +2,7 @@ version: '3'
 services:
   fastify:
     container_name: fastify-dynamic
-    build: ./content
+    build: .
     ports:
       - "3000:3000"
     environment:
