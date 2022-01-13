@@ -17,24 +17,25 @@ services:
    - TRAEFIK_ENTRYPOINTS_FRONT_ADDRESS=${FRONT_HTTP_PORT:-9090}
 
  static:
-  container_name: static 
   build: ./static
   deploy:
    replicas: 2
   labels: 
    - traefik.enable=true
-   - traefik.http.routers.ajax.rule=PathPrefix(`/`)
+   - traefik.http.services.static.loadbalancer.server.port=80
+   - traefik.http.routers.static.rule=PathPrefix(`/`)
    
  dynamic: 
-  container_name: dynamic
   build: ./dynamic
   deploy:
    replicas: 2
   labels: 
    - traefik.enable=true
-   - traefik.http.services.express.loadbalancer.server.port=3000
-   - traefik.http.routers.express.rule=PathPrefix(`/api/json/`)
-   - traefik.http.routers.express.middlewares=express-replacepath
-   - traefik.http.middlewares.express-replacepath.replacepath.path=/
+   - traefik.http.services.dynamic.loadbalancer.server.port=3000
+   - traefik.http.routers.dynamic.rule=PathPrefix(`/api/json`)
+   - traefik.http.routers.dynamic.middlewares=dynamic-replacepath
+   - traefik.http.middlewares.dynamic-replacepath.replacepath.path=/
+  environment:
+  - PORT=3000
 
 
