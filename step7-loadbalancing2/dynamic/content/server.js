@@ -26,7 +26,6 @@ function generateJSON() {
 		min: 0,
 		max: 10
 	});
-	console.log(numberOfPlanes);
 	var planes = [];
 	for (var i = 0; i < numberOfPlanes; ++i) {
 	
@@ -49,7 +48,6 @@ function generateJSON() {
 		});
 		
 	};
-	console.log(planes);
 	return planes;
 }
 

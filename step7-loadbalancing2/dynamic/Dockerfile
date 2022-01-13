@@ -2,7 +2,7 @@ FROM node:alpine
 
 WORKDIR /opt/app
 
-COPY --chown=node:node ./content/package*.json .
+COPY --chown=node:node ./content/package*.json ./
 
 RUN npm install
 
