@@ -1,0 +1,44 @@
+version: "3"
+
+services: 
+ traefik: 
+  image: "traefik:v2.5"
+  command: --api.insecure=true --providers.docker
+  ports:
+   - "${FRONT_HTTP_PORT:-9090}:80"
+   - "8080:8080"
+  volumes:
+   - /var/run/docker.sock:/var/run/docker.sock
+
+  environment:
+   - TRAEFIK_PROVIDERS_DOCKER_EXPOSEDBYDEFAULT=false
+   - TRAEFIK_PROVIDERS_DOCKER=true
+   - TRAEFIK_ENTRYPOINTS_FRONT=true
+   - TRAEFIK_ENTRYPOINTS_FRONT_ADDRESS=${FRONT_HTTP_PORT:-9090}
+
+ static:
+  container_name: static 
+  build: ./static
+  deploy:
+   replicas: 2
+  labels: 
+   - traefik.enable=true
+   - traefik.http.routers.ajax.rule=PathPrefix(`/`)
+   - traefik.http.services.ajax.loadbalancer.sticky=true
+   - traefik.http.services.ajax.loadbalancer.sticky.cookie.name=AjaxSticky
+   
+ dynamic: 
+  container_name: dynamic
+  build: ./dynamic
+  deploy:
+   replicas: 2
+  labels: 
+   - traefik.enable=true
+   - traefik.http.services.express.loadbalancer.server.port=3000
+   - traefik.http.routers.express.rule=PathPrefix(`/api/json/`)
+   - traefik.http.routers.express.middlewares=express-replacepath
+   - traefik.http.middlewares.express-replacepath.replacepath.path=/
+   - traefik.http.services.express.loadbalancer.sticky=true
+   - traefik.http.services.express.loadbalancer.sticky.cookie.name=ExpressSticky
+
+
