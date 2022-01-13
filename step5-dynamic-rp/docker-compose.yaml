@@ -1,0 +1,18 @@
+version: '3'
+services:
+  reverse-proxy:
+    container_name: reverse-proxy
+    build: ./reverse-proxy
+    ports:
+      - "8080:80"
+    depends_on:
+      - static
+      - dynamic
+  static:
+    container_name: static
+    build: ./static
+  dynamic:
+    container_name: dynamic
+    build: ./dynamic
+    environment:
+      - PORT=3000
