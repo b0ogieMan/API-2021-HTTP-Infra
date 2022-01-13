@@ -1,0 +1,45 @@
+version: "3"
+
+services: 
+ traefik: 
+  image: traefik:v2.5
+  container_name: traefik
+  command: --api.insecure=true --providers.docker
+  ports:
+   - "${FRONT_HTTP_PORT:-9090}:80"
+   - "8080:8080"
+  volumes:
+   - /var/run/docker.sock:/var/run/docker.sock
+  environment:
+   - TRAEFIK_PROVIDERS_DOCKER_EXPOSEDBYDEFAULT=false
+   - TRAEFIK_PROVIDERS_DOCKER=true
+   - TRAEFIK_ENTRYPOINTS_FRONT=true
+   - TRAEFIK_ENTRYPOINTS_FRONT_ADDRESS=${FRONT_HTTP_PORT:-9090}
+
+ static:
+  build: /content/static
+  deploy:
+   replicas: 2
+  labels: 
+   - traefik.enable=true
+   - traefik.http.services.static.loadbalancer.server.port=80
+   - traefik.http.routers.static.rule=PathPrefix(`/`)
+   - traefik.http.services.static.loadbalancer.sticky=true
+   - traefik.http.services.static.loadbalancer.sticky.cookie.name=StaticSticky
+   
+ dynamic:
+  build: /content/dynamic
+  deploy:
+   replicas: 2
+  labels: 
+   - traefik.enable=true
+   - traefik.http.services.dynamic.loadbalancer.server.port=3000
+   - traefik.http.routers.dynamic.rule=PathPrefix(`/api/json`)
+   - traefik.http.routers.dynamic.middlewares=dynamic-replacepath
+   - traefik.http.middlewares.dynamic-replacepath.replacepath.path=/
+   - traefik.http.services.dynamic.loadbalancer.sticky=true
+   - traefik.http.services.dynamic.loadbalancer.sticky.cookie.name=DynamicSticky
+  environment:
+   - PORT=3000
+
+
