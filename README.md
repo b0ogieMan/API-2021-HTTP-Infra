@@ -186,7 +186,7 @@ services:
       - PORT=3000
 ```
 ### Résultats
-[résultats_step3_OK](figures/step3-OK.gif)
+![résultats_step3_OK](figures/step3-OK.gif)
 
 ## Etape 4: Requêtes AJAX avec JQuery
 
@@ -270,7 +270,7 @@ services:
 ```
 
 ### Résultats
-[résultats_step4_OK](figures/step4-OK.gif)
+![résultats_step4_OK](figures/step4-OK.gif)
 
 ## Etape 5: Configuration dynamique du reverse proxy
 Les fonctionnalités demandées à cette étape ont déjà été implémentées à l'étape 3.
