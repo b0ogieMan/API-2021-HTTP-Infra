@@ -6,7 +6,7 @@ Nous avons décidé d'utiliser l'image *php:8.0-apache*. Le dossier contenant le
 `/var/www/html` du conteneur.
 
 Le fichier Dockerfile contient :
-```
+```dockerfile
 FROM php:8.0-apache
 
 RUN apt-get update && apt-get install -y vim
@@ -19,12 +19,12 @@ Explications: l'image construite est basée sur php:8.0-apache. Le noyau est mis
 
 L'image peut être construite à l'aide de la commande suivante dans le répertoire contenant le Dockerfile :
 
-```
+```sh
 docker build -t infra/static .
 ```
 Une fois cela fait, le container peut être démarré 
 
-```
+```sh
 docker run -p 8080:80 infra/static
 ```
 
@@ -103,7 +103,7 @@ start();
 ```
 
 Pour démarrer le serveur, nous utilisons cette fois un fichier `docker-compose.yml`. 
-```
+```yml
 version: '3'
 services:
   fastify:
@@ -116,7 +116,7 @@ services:
 ```
 Nous définissons un service *fastify*, chaque container de ce service utilisera l'image construite à l'aide du Dockerfile dans le répertoire courant. Le service est accessible via le port 3000.
 
-```
+```dockerfile
 FROM node:alpine
 
 WORKDIR /opt/app
@@ -135,11 +135,11 @@ Nous avons au préalable généré des fichiers `package.json` (et donc `package
 Tous les fichiers du répertoire `content` sont copiés dans le répertoire de travail du container, c'est-à-dire `/opt/app`. Finalement, le fichier `server.js` est exécuté.
 
 Pour démarrer le container en mode détaché, utiliser la commande suivante :
-```
+```sh
 docker compose up -d
 ```
 Pour arrêter tous les containers :
-```
+```sh
 docker compose down
 ```
 
@@ -155,7 +155,7 @@ AJOUTER SAME ORIGIN POLICY
 
 Nous utilisons ici un serveur php-apache comme reverse proxy. 
 
-```
+```dockerfile
 FROM php:8-apache
 
 RUN apt-get update && apt-get install vim -y
@@ -169,7 +169,7 @@ RUN a2ensite 000-* 001-*
 Nous copions tout le contenu du répertoire `conf/` dans `/etc/apache2/`. Cela va donc transférer tous les fichiers de configuration des hôtes virtuels. Puis, nous activons les modules proxy et proxy_http qui nous permettrons de mettre en place le routage. Finalement, nous activons les hôtes virtuels commençant par 000-* et 001-*, cela aura pour effet de copier les fichiers de configuration dans le répertoire `/etc/apache2/sites-enable`.
 
 Le fichier de configuration *001-reverse-proxy.conf* permet de configurer le routage du proxy. Si l'URL correspond à *localhost:XXXX/api/json*, il y aura une redirection vers le container dynamic. Si l'URL correspond à la racine du nom de domaine, cette fois la requête ira vers le serveur statique.
-```
+```ApacheConf
 <VirtualHost *:80>
 	
 	ServerName localhost
@@ -188,14 +188,15 @@ Le fichier de configuration *001-reverse-proxy.conf* permet de configurer le rou
 ```
 
 Si l'URL ne correspond pas à celles spécifiées précédemment, le serveur ne renvoit rien (fichier `000-default.conf`).
-```
+
+```ApacheConf
 <VirtualHost *:80>
 </VirtualHost>
 ```
 
 Nous utilisons encore une fois un fichier `docker-compose.yml` pour démarrer l'infrastructure.
 
-```
+```yml
 version: '3'
 services:
   reverse-proxy:
@@ -219,11 +220,11 @@ services:
 Le fichier est similaire à celui de l'étapte précédente, mais cette fois 3 services sont déclarés. Le seul service accessible par l'extérieur grâce au port-forwarding est le reverse-proxy. Pour les deux autres, aucune règle n'est spécifiée, mais bien évidemment les containers pourront tout à fait communiquer et recevoir des requêtes à l'intérieur du réseau.
 
 Pour démarrer l'infrastructure en mode détaché, utiliser la commande suivante :
-```
+```sh
 docker compose up -d
 ```
 Pour arrêter tous les containers :
-```
+```sh
 docker compose down
 ```
 
@@ -322,7 +323,7 @@ Nous nous basons sur l'état final de l'étape 5, c'est-à-dire que les images e
 
 Nous utilisons donc un fichier `docker-compose.yml`. 
 
-```
+```yml
 services: 
  traefik: 
   image: "traefik:v2.5"
@@ -345,13 +346,13 @@ Puis, nous ajoutons des variables d'environnement pour désactiver l'exposition 
 
 ^ À revoir ... ^
 
-```
+```yml
 deploy:
  replicas: 2
 ```
 Cela permet de démarrer deux containers avec la même image.
 
-```
+```yml
   labels: 
    - traefik.enable=true
    - traefik.http.services.static.loadbalancer.server.port=80
@@ -359,7 +360,7 @@ Cela permet de démarrer deux containers avec la même image.
 ```
 Le service est exposé à traefik (pour qu'il puisse le gérer dynamiquement), puis le port de communication (*:80*) utilisé par le container. Le dernier label sert à déclarer un router qui redirigera la requête HTTP sur ce service si la requête tente d'accéder à la racine du nom de domaine.
 
-```
+```yml
   labels: 
    - traefik.enable=true
    - traefik.http.services.dynamic.loadbalancer.server.port=3000
@@ -369,14 +370,14 @@ Le service est exposé à traefik (pour qu'il puisse le gérer dynamiquement), p
 ```
 Les règle sont relativement similaires pour le service dynamic, mais cette fois lorsqu'une requête est envoyé à /api/json, le routeur va la modifier pour qu'elle soit redirigée à la racine du service.
 
-```
+```yml
   environment:
   - PORT=3000
 ```
 Je ne sais plus pourquoi cette variable d'environnement est nécessaire...
 
 **Fichier final:**
-```
+```yml
 version: "3"
 
 services: 
@@ -435,7 +436,7 @@ De même pour les serveurs statiques, c'est certes très rapide, mais nous voyon
 
 Deux labels ont été rajoutés dans chaque service pour activer les sticky sessions :
 
-```
+```yml
    - traefik.http.services.dynamic.loadbalancer.sticky=true
    - traefik.http.services.dynamic.loadbalancer.sticky.cookie.name=<Nom_désiré>
 ```
@@ -444,7 +445,7 @@ L'infrastructure peut être démarrée avec `docker compose up -d`.
 
 ### Résultats
 
-En chargant pour la première fois le site web, nous voyons dans l'onglet *Network* que le serveur envoie dans sa réponse un cookie au client. Lors d'un rafraîchissement, le cookie est envoyé au serveur par le client. Le comportement est le même en testant avec [localhost:8080/api/json](localhost:8080/api/json).
+En chargant pour la première fois le site web, nous voyons dans l'onglet *Network* que le serveur envoie dans sa réponse un cookie au client. Lors d'un rafraîchissement, le cookie est envoyé au serveur par le client. Le comportement est le même en testant avec [localhost:8080/api/json](http://localhost:8080/api/json).
 
 ![résultats_step7_OK](figures/step7-OK.gif)
 
@@ -454,19 +455,19 @@ La fonctionnalité demandée dans cette étape est déjà implémentée à l'ét
 
 Nous avons retiré les lignes suivantes des différents services dans le fichier docker-compose.
 
-```
+```yml
   deploy:
    replicas: 2
 ```
 
 À la place, nous démarrons l'infrastructure en ajoutant `--scale <nom_service>=<nbr_container>`. 
 
-```
-docker compose up -d --no-recreate --scale static=3 --scale dynamic=3
+```sh
+docker compose up -d --scale static=3 --scale dynamic=3
 ```
 Une fois l'infrastructure opérationnel, il est possible de modifier le nombre d'instances d'un service en insérant à nouveau la commande 
 
-```
+```sh
 docker compose up -d --no-recreate --scale static=3 --scale dynamic=5
 ```
 Cela aura pour effet d'ajouter 2 containers au service dynamic sans recréer les anciens déjà lancés.
