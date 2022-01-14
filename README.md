@@ -331,9 +331,175 @@ Les fonctionnalités demandées à cette étape ont déjà été implémentées 
 
 # Étapes supplémentaires
 
+Pour les prochaines étapes, nous passerons d'un proxy inversé Apache à un utilisant l'outil Traefik.
+
+Traefik est un reverse-proxy HTTP très moderne qui permet de gérer facilement le routage, la répartition de charge. Il dispose de plein d'autres fonctionnalités très intéressantes et utiles.
+
 ## Répartition de charge : plusieurs noeuds serveurs
 
+Nous nous basons sur l'état final de l'étape 5, c'est-à-dire que les images et le contenu des répertoires `dynamic/` et `static/` n'a pas changé.
+
+Nous utilisons donc un fichier `docker-compose.yml`. 
+
+```
+services: 
+ traefik: 
+  image: "traefik:v2.5"
+  command: --api.insecure=true --providers.docker
+  ports:
+   - "${FRONT_HTTP_PORT:-9090}:80"
+   - "8080:8080"
+  volumes:
+   - /var/run/docker.sock:/var/run/docker.sock
+
+  environment:
+   - TRAEFIK_PROVIDERS_DOCKER_EXPOSEDBYDEFAULT=false
+   - TRAEFIK_PROVIDERS_DOCKER=true
+   - TRAEFIK_ENTRYPOINTS_FRONT=true
+   - TRAEFIK_ENTRYPOINTS_FRONT_ADDRESS=${FRONT_HTTP_PORT:-9090}
+```
+Nous définissons à un service qui utilisera l'image de traefik. Les commandes permettent d'activer l'interface utilisateur et de dire à traefik qu'il doit écouter les évènements et récupérer les données grâce à l'API docker. Il faut ajouter le volume `/var/run/docker.sock:/var/run/docker.sock`. Le port forwarding "8080:8080" permet d'accéder à l'interface de gestion via [localhost:8080](localhost:8080) et "9090:80" servira à se rendre sur le [site web](localhost:9090).
+
+Puis, nous ajoutons des variables d'environnement pour désactiver l'exposition par défaut, activer l'utilisation de docker comme provider, activer un entrypoint front et spécifier le port d'accès à cet entrypoint.
+
+^ À revoir ... ^
+
+```
+deploy:
+ replicas: 2
+```
+Cela permet de démarrer deux containers avec la même image.
+
+```
+  labels: 
+   - traefik.enable=true
+   - traefik.http.services.static.loadbalancer.server.port=80
+   - traefik.http.routers.static.rule=PathPrefix(`/`)
+```
+Le service est exposé à traefik (pour qu'il puisse le gérer dynamiquement), puis le port de communication (*:80*) utilisé par le container. Le dernier label sert à déclarer un router qui redirigera la requête HTTP sur ce service si la requête tente d'accéder à la racine du nom de domaine.
+
+```
+  labels: 
+   - traefik.enable=true
+   - traefik.http.services.dynamic.loadbalancer.server.port=3000
+   - traefik.http.routers.dynamic.rule=PathPrefix(`/api/json`)
+   - traefik.http.routers.dynamic.middlewares=dynamic-replacepath
+   - traefik.http.middlewares.dynamic-replacepath.replacepath.path=/
+```
+Les règle sont relativement similaires pour le service dynamic, mais cette fois lorsqu'une requête est envoyé à /api/json, le routeur va la modifier pour qu'elle soit redirigée à la racine du service.
+
+```
+  environment:
+  - PORT=3000
+```
+Je ne sais plus pourquoi cette variable d'environnement est nécessaire...
+
+**Fichier final:**
+```
+version: "3"
+
+services: 
+ traefik: 
+  image: "traefik:v2.5"
+  command: --api.insecure=true --providers.docker
+  ports:
+   - "${FRONT_HTTP_PORT:-9090}:80"
+   - "8080:8080"
+  volumes:
+   - /var/run/docker.sock:/var/run/docker.sock
+
+  environment:
+   - TRAEFIK_PROVIDERS_DOCKER_EXPOSEDBYDEFAULT=false
+   - TRAEFIK_PROVIDERS_DOCKER=true
+   - TRAEFIK_ENTRYPOINTS_FRONT=true
+   - TRAEFIK_ENTRYPOINTS_FRONT_ADDRESS=${FRONT_HTTP_PORT:-9090}
+
+ static:
+  build: ./static
+  deploy:
+   replicas: 2
+  labels: 
+   - traefik.enable=true
+   - traefik.http.services.static.loadbalancer.server.port=80
+   - traefik.http.routers.static.rule=PathPrefix(`/`)
+   
+ dynamic: 
+  build: ./dynamic
+  deploy:
+   replicas: 2
+  labels: 
+   - traefik.enable=true
+   - traefik.http.services.dynamic.loadbalancer.server.port=3000
+   - traefik.http.routers.dynamic.rule=PathPrefix(`/api/json`)
+   - traefik.http.routers.dynamic.middlewares=dynamic-replacepath
+   - traefik.http.middlewares.dynamic-replacepath.replacepath.path=/
+  environment:
+  - PORT=3000
+```
+
+### Résultats
+
+
 ## Répartition de charge : round-robin vs sticky sessions
+
+Deux labels ont été rajoutés dans chaque service pour activer les sticky sessions :
+
+```
+   - traefik.http.services.dynamic.loadbalancer.sticky=true
+   - traefik.http.services.dynamic.loadbalancer.sticky.cookie.name=<Nom_désiré>
+```
+
+**Fichier final:** 
+
+```
+version: "3"
+
+services: 
+ traefik: 
+  image: "traefik:v2.5"
+  container_name: traefik
+  command: --api.insecure=true --providers.docker
+  ports:
+   - "${FRONT_HTTP_PORT:-9090}:80"
+   - "8080:8080"
+  volumes:
+   - /var/run/docker.sock:/var/run/docker.sock
+  environment:
+   - TRAEFIK_PROVIDERS_DOCKER_EXPOSEDBYDEFAULT=false
+   - TRAEFIK_PROVIDERS_DOCKER=true
+   - TRAEFIK_ENTRYPOINTS_FRONT=true
+   - TRAEFIK_ENTRYPOINTS_FRONT_ADDRESS=${FRONT_HTTP_PORT:-9090}
+
+ static:
+  build: ./static
+  deploy:
+   replicas: 2
+  labels: 
+   - traefik.enable=true
+   - traefik.http.services.static.loadbalancer.server.port=80
+   - traefik.http.routers.static.rule=PathPrefix(`/`)
+   - traefik.http.services.static.loadbalancer.sticky=true
+   - traefik.http.services.static.loadbalancer.sticky.cookie.name=StaticSticky
+   
+ dynamic:
+  build: ./dynamic
+  deploy:
+   replicas: 2
+  labels: 
+   - traefik.enable=true
+   - traefik.http.services.dynamic.loadbalancer.server.port=3000
+   - traefik.http.routers.dynamic.rule=PathPrefix(`/api/json`)
+   - traefik.http.routers.dynamic.middlewares=dynamic-replacepath
+   - traefik.http.middlewares.dynamic-replacepath.replacepath.path=/
+   - traefik.http.services.dynamic.loadbalancer.sticky=true
+   - traefik.http.services.dynamic.loadbalancer.sticky.cookie.name=DynamicSticky
+  environment:
+   - PORT=3000
+
+
+
+```
+`
 
 ## Gestion dynamique du cluster
 
