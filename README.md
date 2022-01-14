@@ -151,6 +151,8 @@ docker compose down
 
 ## Etape 3: Reverse proxy avec apache (configuration statique)
 
+AJOUTER SAME ORIGIN POLICY
+
 Nous utilisons ici un serveur php-apache comme reverse proxy. 
 
 ```
@@ -495,13 +497,34 @@ services:
    - traefik.http.services.dynamic.loadbalancer.sticky.cookie.name=DynamicSticky
   environment:
    - PORT=3000
-
-
-
 ```
-`
+
+### Résultats
+
 
 ## Gestion dynamique du cluster
+
+La fonctionnalité demandée dans cette étape est déjà implémentée à l'étape *Répartition de charge : plusieurs noeuds serveurs*. Nous avons toutefois décidé de tester une autre méthode.
+
+Nous avons retiré les lignes suivantes des différents services dans le fichier docker-compose.
+
+```
+  deploy:
+   replicas: 2
+```
+
+À la place, nous démarrons l'infrastructure en ajoutant `--scale <nom_service>=<nbr_container>`. 
+
+```
+docker compose up -d --scale static=3 --scale dynamic=3
+```
+Une fois l'infrastructure opérationnel, il est possible de modifier le nombre d'instances d'un service en insérant à nouveau la commande 
+
+```
+docker compose up -d --scale static=3 --scale dynamic=5
+```
+Cela aura pour effet de recréer les containers du service dynamic et d'en ajouter 2.
+
 
 ## Interface de gestion utilisateur
 
