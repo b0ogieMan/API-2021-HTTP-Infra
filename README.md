@@ -235,7 +235,7 @@ Si l'on accède à [localhost:8080/api/json](localhost:8080/api/json) les donné
 
 ## Etape 4: Requêtes AJAX avec JQuery
 
-Le code html a été modifié et une classe a été ajoutée à la balise *<p>*. Cette classe permettra de sélectionner le paragraphe et en changer les propriétés grâce au script JS.
+Le code html a été modifié et une classe a été ajoutée à la balise *<p>*. Cette classe permettra de sélectionner le paragraphe et en changer les propriétés grâce au script.
 
 ```html
 	<header id="fh5co-header" class="fh5co-cover js-fullheight" role="banner">
@@ -258,7 +258,7 @@ Le code html a été modifié et une classe a été ajoutée à la balise *<p>*.
 	</header>
 ```
 
-À la fin du fichier `index.html`, il faut bien évidemment indiquer où aller chercher le script.
+À la fin du fichier `index.html`, il faut bien évidemment indiquer où aller chercher le script JS.
 
 ```html
 	<!-- Custom script to load flights information -->
@@ -293,27 +293,6 @@ $(function() {
 	loadFlights();
 	setInterval(loadFlights, 2000);
 });
-```
-
-```
-version: '3'
-services:
-  reverse-proxy:
-    container_name: reverse-proxy
-    build: ./reverse-proxy
-    ports:
-      - "8080:80"
-    depends_on:
-      - static
-      - dynamic
-  static:
-    container_name: static
-    build: ./static
-  dynamic:
-    container_name: dynamic
-    build: ./dynamic
-    environment:
-      - PORT=3000
 ```
 
 La configuration de l'infrastructure dans le docker-compose est la même qu'à l'étape précédente. En effet, les seules modifications faites se trouvent dans les fichiers du site web. Il suffit simplement de reconstruire l'image *static* et les changements seront pris en compte.
@@ -439,7 +418,17 @@ services:
   - PORT=3000
 ```
 
+L'infrastructure peut être démarrée avec `docker compose up`.
+
 ### Résultats
+
+Après lancement de l'infrastructure et chargement du site, nous voyons que traefik répartit la charge automatiquement entre les deux serveurs dynamique via les logs dans la console.
+
+![résultats_step6_OK](figures/step6-OK.gif)
+
+De même pour les serveurs statiques, c'est certes très rapide, mais nous voyons clairement que traefik envoit certaines requêtes à l'un et d'autres à l'autre à chaque rafraîchissement de la page.
+
+![résultats_step6_OK2](figures/step6-OK-2.gif)
 
 
 ## Répartition de charge : round-robin vs sticky sessions
@@ -451,56 +440,13 @@ Deux labels ont été rajoutés dans chaque service pour activer les sticky sess
    - traefik.http.services.dynamic.loadbalancer.sticky.cookie.name=<Nom_désiré>
 ```
 
-**Fichier final:** 
-
-```
-version: "3"
-
-services: 
- traefik: 
-  image: "traefik:v2.5"
-  container_name: traefik
-  command: --api.insecure=true --providers.docker
-  ports:
-   - "${FRONT_HTTP_PORT:-9090}:80"
-   - "8080:8080"
-  volumes:
-   - /var/run/docker.sock:/var/run/docker.sock
-  environment:
-   - TRAEFIK_PROVIDERS_DOCKER_EXPOSEDBYDEFAULT=false
-   - TRAEFIK_PROVIDERS_DOCKER=true
-   - TRAEFIK_ENTRYPOINTS_FRONT=true
-   - TRAEFIK_ENTRYPOINTS_FRONT_ADDRESS=${FRONT_HTTP_PORT:-9090}
-
- static:
-  build: ./static
-  deploy:
-   replicas: 2
-  labels: 
-   - traefik.enable=true
-   - traefik.http.services.static.loadbalancer.server.port=80
-   - traefik.http.routers.static.rule=PathPrefix(`/`)
-   - traefik.http.services.static.loadbalancer.sticky=true
-   - traefik.http.services.static.loadbalancer.sticky.cookie.name=StaticSticky
-   
- dynamic:
-  build: ./dynamic
-  deploy:
-   replicas: 2
-  labels: 
-   - traefik.enable=true
-   - traefik.http.services.dynamic.loadbalancer.server.port=3000
-   - traefik.http.routers.dynamic.rule=PathPrefix(`/api/json`)
-   - traefik.http.routers.dynamic.middlewares=dynamic-replacepath
-   - traefik.http.middlewares.dynamic-replacepath.replacepath.path=/
-   - traefik.http.services.dynamic.loadbalancer.sticky=true
-   - traefik.http.services.dynamic.loadbalancer.sticky.cookie.name=DynamicSticky
-  environment:
-   - PORT=3000
-```
+L'infrastructure peut être démarrée avec `docker compose up -d`.
 
 ### Résultats
 
+En chargant pour la première fois le site web, nous voyons dans l'onglet *Network* que le serveur envoie dans sa réponse un cookie au client. Lors d'un rafraîchissement, le cookie est envoyé au serveur par le client. Le comportement est le même en testant avec [localhost:8080/api/json](localhost:8080/api/json).
+
+![résultats_step7_OK](figures/step7-OK.gif)
 
 ## Gestion dynamique du cluster
 
@@ -516,15 +462,31 @@ Nous avons retiré les lignes suivantes des différents services dans le fichier
 À la place, nous démarrons l'infrastructure en ajoutant `--scale <nom_service>=<nbr_container>`. 
 
 ```
-docker compose up -d --scale static=3 --scale dynamic=3
+docker compose up -d --no-recreate --scale static=3 --scale dynamic=3
 ```
 Une fois l'infrastructure opérationnel, il est possible de modifier le nombre d'instances d'un service en insérant à nouveau la commande 
 
 ```
-docker compose up -d --scale static=3 --scale dynamic=5
+docker compose up -d --no-recreate --scale static=3 --scale dynamic=5
 ```
-Cela aura pour effet de recréer les containers du service dynamic et d'en ajouter 2.
+Cela aura pour effet d'ajouter 2 containers au service dynamic sans recréer les anciens déjà lancés.
+
+| :warning: 	| Bug possible avec le flag *--no-recreate* |
+| :-----------:	| ------------- |
+| Lien 		| [https://github.com/docker/compose/issues/8940](https://github.com/docker/compose/issues/8940)  |
+
+### Résultats
+
+En spécifiant un nouveau nombre d'instances d'un service, docker va recréer les containers du service dynamic qui étaient déjà présents et créer 1 nouveau container qu'il rajoutera à
+
+// TODO  Changer gif avec recreate ...
+
+![résultats_step8_OK](figures/step8-OK.gif)
 
 
 ## Interface de gestion utilisateur
+
+L'infrastructure peut être démarrée avec `docker compose up -d`.
+
+### Résultats
 

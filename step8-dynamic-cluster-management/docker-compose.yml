@@ -12,14 +12,11 @@ services:
    - /var/run/docker.sock:/var/run/docker.sock
   environment:
    - TRAEFIK_PROVIDERS_DOCKER_EXPOSEDBYDEFAULT=false
-   - TRAEFIK_PROVIDERS_DOCKER=true
    - TRAEFIK_ENTRYPOINTS_FRONT=true
    - TRAEFIK_ENTRYPOINTS_FRONT_ADDRESS=${FRONT_HTTP_PORT:-9090}
 
  static:
   build: ./static
-  deploy:
-   replicas: 2
   labels: 
    - traefik.enable=true
    - traefik.http.services.static.loadbalancer.server.port=80
@@ -29,8 +26,6 @@ services:
    
  dynamic:
   build: ./dynamic
-  deploy:
-   replicas: 2
   labels: 
    - traefik.enable=true
    - traefik.http.services.dynamic.loadbalancer.server.port=3000
