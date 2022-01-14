@@ -17,7 +17,7 @@ EXPOSE 8080
 ```
 Explications: l'image construite est basée sur php:8.0-apache. Le noyau est mis à jour et l'outil *vim* est installé. Le contenu du répertoire *content/* est copié dans le container à l'emplacement `/var/www/html/`. Finalement, le port *8080* est exposé.
 
-L'image peut être construite à l'aide de la commande suivante: 
+L'image peut être construite à l'aide de la commande suivante dans le répertoire contenant le Dockerfile :
 
 ```
 docker build -t infra/static .
@@ -35,6 +35,7 @@ Maintenant, il peut être accédé via [localhost:8080](http://localhost:8080).
 
 ## Etape 2: Serveur HTTP dynamique avec fastify.js
 
+Le fichier server.js permet de créer un serveur utilisant le module Fastify.
 
 ```js
 // On dit qu'on utilise le module Chance qui permet de générer des données aléatoirement
@@ -101,7 +102,7 @@ start();
 
 ```
 
-Cette fois nous utilisons un fichier `docker-compose.yml`. 
+Pour démarrer le serveur, nous utilisons cette fois un fichier `docker-compose.yml`. 
 ```
 version: '3'
 services:
@@ -113,6 +114,7 @@ services:
     environment:
       - PORT=3000
 ```
+Nous définissons un service *fastify*, chaque container de ce service utilisera l'image construite à l'aide du Dockerfile dans le répertoire courant. Le service est accessible via le port 3000.
 
 ```
 FROM node:alpine
@@ -129,6 +131,17 @@ USER node
 
 ENTRYPOINT [ "node", "server.js" ]
 ```
+Nous avons au préalable généré des fichiers `package.json` (et donc `package-lock.json`). Ces derniers permettront d'installer toutes les dépendances lors de l'exécution de la commande `npm install`.
+Tous les fichiers du répertoire `content` sont copiés dans le répertoire de travail du container, c'est-à-dire `/opt/app`. Finalement, le fichier `server.js` est exécuté.
+
+Pour démarrer le container en mode détaché, utiliser la commande suivante :
+```
+docker compose up -d
+```
+Pour arrêter tous les containers :
+```
+docker compose down
+```
 
 ### Résultat
 À chaque rafraîchissement de [localhost:3000](localhost:3000), les données affichées sont bien différentes.
@@ -137,7 +150,21 @@ ENTRYPOINT [ "node", "server.js" ]
 
 
 ## Etape 3: Reverse proxy avec apache (configuration statique)
-Pour cette étape, nous utilisons un serveur
+
+Nous utilisons ici un serveur php-apache comme reverse proxy. 
+
+```
+FROM php:8-apache
+
+RUN apt-get update && apt-get install vim -y
+
+COPY conf/ /etc/apache2/
+
+RUN a2enmod proxy proxy_http
+
+RUN a2ensite 000-* 001-*
+```
+Nous copions tout le contenu du répertoire `conf/` dans `/etc/apache2/`. Cela va donc transférer tous les fichiers de configuration des hôtes virtuels. Puis, nous activons les modules proxy et proxy_http qui nous permettrons de mettre en place le routage. Finalement, nous activons les hôtes virtuels commençant par 000-* et 001-*, cela aura pour effet de copier les fichiers de configuration dans le répertoire `/etc/apache2/sites-enable`.
 
 Le fichier de configuration *001-reverse-proxy.conf* permet de configurer le routage du proxy. Si l'URL correspond à *localhost:XXXX/api/json*, il y aura une redirection vers le container dynamic. Si l'URL correspond à la racine du nom de domaine, cette fois la requête ira vers le serveur statique.
 ```
@@ -158,12 +185,13 @@ Le fichier de configuration *001-reverse-proxy.conf* permet de configurer le rou
 </VirtualHost>
 ```
 
-Si l'URL ne correspond pas à celles spécifiées précédemment, le serveur ne renvoit rien.
+Si l'URL ne correspond pas à celles spécifiées précédemment, le serveur ne renvoit rien (fichier `000-default.conf`).
 ```
 <VirtualHost *:80>
 </VirtualHost>
 ```
 
+Nous utilisons encore une fois un fichier `docker-compose.yml` pour démarrer l'infrastructure.
 
 ```
 version: '3'
@@ -185,7 +213,22 @@ services:
     environment:
       - PORT=3000
 ```
+
+Le fichier est similaire à celui de l'étapte précédente, mais cette fois 3 services sont déclarés. Le seul service accessible par l'extérieur grâce au port-forwarding est le reverse-proxy. Pour les deux autres, aucune règle n'est spécifiée, mais bien évidemment les containers pourront tout à fait communiquer et recevoir des requêtes à l'intérieur du réseau.
+
+Pour démarrer l'infrastructure en mode détaché, utiliser la commande suivante :
+```
+docker compose up -d
+```
+Pour arrêter tous les containers :
+```
+docker compose down
+```
+
 ### Résultats
+
+Si l'on accède à [localhost:8080/api/json](localhost:8080/api/json) les données JSON générées aléatoirement sont affichées, tandis qu'en accédant à [localhost:8080](localhost:8080) le site web statique s'affiche correctement.
+
 ![résultats_step3_OK](figures/step3-OK.gif)
 
 ## Etape 4: Requêtes AJAX avec JQuery
@@ -223,6 +266,8 @@ Le code html a été modifié et une classe a été ajoutée à la balise *<p>*.
 </html>
 
 ```
+
+Le script `flight.js` suivant exécute la fonction *loadFlights()* toutes les 2 secondes. Cette dernière va récupérer les données JSON en faisant une requête GET à l'URL `/api/json/`. S'il y a des données à afficher, un message sera composé avec les données du premier vol du tableau JSON. Finalement, le text contenu dans la balise utilisant la classe `json-app` est mis à jour.
 
 ```js
 $(function() {
@@ -269,8 +314,17 @@ services:
       - PORT=3000
 ```
 
+La configuration de l'infrastructure dans le docker-compose est la même qu'à l'étape précédente. En effet, les seules modifications faites se trouvent dans les fichiers du site web. Il suffit simplement de reconstruire l'image *static* et les changements seront pris en compte.
+
 ### Résultats
+
+En accédant au site web via [localhost:8080](localhost:8080), la page d'accueil est mise à jour toutes les 2 secondes et affiche correctement les données JSON.
+
 ![résultats_step4_OK](figures/step4-OK.gif)
+
+Si nous inspectons les requêtes dans l'onglet *Network* des outils développeur du navigateur, nous voyons bien que toutes les 2 secondes une requête est envoyé à `/api/json`.
+
+![résultats_step4_OK](figures/step4-OK2.gif)
 
 ## Etape 5: Configuration dynamique du reverse proxy
 Les fonctionnalités demandées à cette étape ont déjà été implémentées à l'étape 3.
