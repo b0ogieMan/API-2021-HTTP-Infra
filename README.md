@@ -463,18 +463,14 @@ Nous avons retiré les lignes suivantes des différents services dans le fichier
 À la place, nous démarrons l'infrastructure en ajoutant `--scale <nom_service>=<nbr_container>`. 
 
 ```sh
-docker compose up -d --scale static=3 --scale dynamic=3
+docker compose up -d --scale static=3 --no-recreate --scale dynamic=3 --no-recreate
 ```
 Une fois l'infrastructure opérationnel, il est possible de modifier le nombre d'instances d'un service en insérant à nouveau la commande 
 
 ```sh
-docker compose up -d --no-recreate --scale static=3 --scale dynamic=5
+docker compose up -d --scale static=3 --no-recreate --scale dynamic=5 --no-recreate
 ```
 Cela aura pour effet d'ajouter 2 containers au service dynamic sans recréer les anciens déjà lancés.
-
-| :warning: 	| Bug possible avec le flag *--no-recreate* |
-| :-----------:	| ------------- |
-| Lien 		| [https://github.com/docker/compose/issues/8940](https://github.com/docker/compose/issues/8940)  |
 
 ### Résultats
 
