@@ -486,7 +486,30 @@ En spécifiant un nouveau nombre d'instances d'un service, docker va recréer le
 
 ## Interface de gestion utilisateur
 
-L'infrastructure peut être démarrée avec `docker compose up -d`.
+Nous avons simplement ajouté un nouveau service dans le fichier docker-compose de l'étape précédente :
+
+```yml
+ portainer:
+  image: portainer/portainer-ce:latest
+  container_name: portainer
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  volumes:
+    - /etc/localtime:/etc/localtime:ro
+    - /var/run/docker.sock:/var/run/docker.sock:ro
+  ports:
+    - 9000:9000
+```
+
+Il faut impérativement ajouter le volume `/var/run/docker.sock:/var/run/docker.sock:ro` pour que Portainer puisse récupérer les informations depuis Docker.
+
+L'infrastructure peut être démarrée avec `docker compose up -d --scale static=<nbr_d'instances_désirées> --scale dynamic=<nbr_d'instances_désirées>`. Un seul container portainer sera démarré.
 
 ### Résultats
+
+En accédant à l'adresse [localhost:9000](http://localhost:9000), le portail portainer s'afficher, il est possible de créer un mot de passe pour le compte admin. Une fois cela fait, dans l'onglet Home, il est possible de sélectionner l'environnement local et d'obtenir des informations sur celui-ci.
+
+![résultats_step9_OK](figures/step9-OK.gif)
+
 
