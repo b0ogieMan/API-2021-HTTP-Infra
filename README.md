@@ -15,18 +15,20 @@ COPY content/ /var/www/html/
 
 EXPOSE 8080
 ```
-Explications: l'image construite est basée sur php:8.0-apache. Le noyau est mis à jour et l'outil *vim* est installé. Le contenu du répertoire *content/* est copié dans le container à l'emplacement `/var/www/html/`. Finalement, le port *8080* est exposé.
+**Explications**: l'image construite est basée sur php:8.0-apache. Le noyau est mis à jour et l'outil *vim* est installé. Le contenu du répertoire *content/* est copié dans le container à l'emplacement `/var/www/html/`. Finalement, le port *8080* est exposé (utile pour la communication inter-container). 
 
 L'image peut être construite à l'aide de la commande suivante dans le répertoire contenant le Dockerfile :
 
 ```sh
-docker build -t infra/static .
+docker build -t api/static .
 ```
 Une fois cela fait, le container peut être démarré 
 
 ```sh
-docker run -p 8080:80 infra/static
+docker run -p 8080:80 api/static
 ```
+
+La configuration apache est celle par défaut, configurée par l'image _php:8.0-apache_.
 
 ### Résultat
 Maintenant, il peut être accédé via [localhost:8080](http://localhost:8080). 
@@ -38,22 +40,23 @@ Maintenant, il peut être accédé via [localhost:8080](http://localhost:8080).
 Le fichier server.js permet de créer un serveur utilisant le module Fastify.
 
 ```js
-// On dit qu'on utilise le module Chance qui permet de générer des données aléatoirement
+/* On dit qu'on utilise le module Chance qui permet de générer des données aléatoirement et Fastify*/
 import Chance from 'chance';
 import Fastify from 'fastify';
 
+/* Construit un serveur Fastify */
 const fastify = Fastify({
    logger: true
 });
 const chance = Chance();
-const port = process.env.PORT;
+const port = process.env.PORT; // récupère le port dans la variable d'environnement PORT
 
 /* Lors d'un accès à la racine du site, le serveur va générer une charge utile JSON et la renvoyer */
 fastify.get('/', (request, reply) => {
    reply.send(generateJSON());
 });
 
-/* Le serveur écoute les requêtes sur le port 3000 */
+/* Le serveur écoute les requêtes sur le port spécifié dans la variable d'environnement */
 const start = async () => {
    try {
       await fastify.listen(port, '0.0.0.0')
@@ -101,6 +104,7 @@ function generateJSON() {
 start();
 
 ```
+Le fichier est ensuite placé dans le répertoire `content` qui sera copié dans le container.
 
 Pour démarrer le serveur, nous utilisons cette fois un fichier `docker-compose.yml`. 
 ```yml
@@ -114,7 +118,7 @@ services:
     environment:
       - PORT=3000
 ```
-Nous définissons un service *fastify*, chaque container de ce service utilisera l'image construite à l'aide du Dockerfile dans le répertoire courant. Le service est accessible via le port 3000.
+Nous définissons un service *fastify*, chaque container de ce service utilisera l'image construite à l'aide du Dockerfile dans le répertoire courant. Le service est accessible via le port 3000. Et nous définissons une variable d'environnement PORT qui a comme valeur 3000. Celle-ce va informer le serveur `JS` que le port souhaité est celui-là.
 
 ```dockerfile
 FROM node:alpine
@@ -131,8 +135,11 @@ USER node
 
 ENTRYPOINT [ "node", "server.js" ]
 ```
-Nous avons au préalable généré des fichiers `package.json` (et donc `package-lock.json`). Ces derniers permettront d'installer toutes les dépendances lors de l'exécution de la commande `npm install`.
+Nous avons au préalable généré des fichiers `package.json` (et donc `package-lock.json`) avec `npm install fastify chance`. Ces derniers permettront d'installer toutes les dépendances lors de l'exécution de la commande `npm install` dans le container. La raison de copier d'abord les fichiers _package*.json_ est que si nous modifions uniquement le contenu du serveur (les fichiers js, etc.) nous n'avons pas besoin de rebuild l'image entière. Nous pouvons profiter de la mise en cache de Docker des différentes étapes lors du build de l'image. De cette manière, les étapes jusqu'à `RUN npm install` seront beaucoup plus rapides, car déjà en cache.
+
 Tous les fichiers du répertoire `content` sont copiés dans le répertoire de travail du container, c'est-à-dire `/opt/app`. Finalement, le fichier `server.js` est exécuté.
+
+La commande `USER` permet de définir l'utilisateur qui lancera la commande du container. Ici, nous passons de root à node.
 
 Pour démarrer le container en mode détaché, utiliser la commande suivante :
 ```sh
@@ -151,8 +158,6 @@ docker compose down
 
 ## Etape 3: Reverse proxy avec apache (configuration statique)
 
-AJOUTER SAME ORIGIN POLICY
-
 Nous utilisons ici un serveur php-apache comme reverse proxy. 
 
 ```dockerfile
@@ -169,6 +174,7 @@ RUN a2ensite 000-* 001-*
 Nous copions tout le contenu du répertoire `conf/` dans `/etc/apache2/`. Cela va donc transférer tous les fichiers de configuration des hôtes virtuels. Puis, nous activons les modules proxy et proxy_http qui nous permettrons de mettre en place le routage. Finalement, nous activons les hôtes virtuels commençant par 000-* et 001-*, cela aura pour effet de copier les fichiers de configuration dans le répertoire `/etc/apache2/sites-enable`.
 
 Le fichier de configuration *001-reverse-proxy.conf* permet de configurer le routage du proxy. Si l'URL correspond à *localhost:XXXX/api/json*, il y aura une redirection vers le container dynamic. Si l'URL correspond à la racine du nom de domaine, cette fois la requête ira vers le serveur statique.
+
 ```ApacheConf
 <VirtualHost *:80>
 	
@@ -186,8 +192,8 @@ Le fichier de configuration *001-reverse-proxy.conf* permet de configurer le rou
 	
 </VirtualHost>
 ```
-
-Si l'URL ne correspond pas à celles spécifiées précédemment, le serveur ne renvoit rien (fichier `000-default.conf`).
+Cette configuration est toutefois moins fragile que celle présentée dans les webcasts (utiliser l'ip des containers plutôt que leur nom) et un peu plus dynamique.
+Si l'URL ne correspond pas à celles spécifiées précédemment, le serveur ne renvoit rien (fichier `000-default.conf`). 
 
 ```ApacheConf
 <VirtualHost *:80>
@@ -217,7 +223,7 @@ services:
       - PORT=3000
 ```
 
-Le fichier est similaire à celui de l'étapte précédente, mais cette fois 3 services sont déclarés. Le seul service accessible par l'extérieur grâce au port-forwarding est le reverse-proxy. Pour les deux autres, aucune règle n'est spécifiée, mais bien évidemment les containers pourront tout à fait communiquer et recevoir des requêtes à l'intérieur du réseau.
+Le fichier est similaire à celui de l'étapte précédente, mais cette fois 3 services sont déclarés. Le seul service accessible par l'extérieur grâce au port-forwarding est le reverse-proxy. Pour les deux autres, aucune règle n'est spécifiée, mais bien évidemment les containers pourront tout à fait communiquer et recevoir des requêtes à l'intérieur du réseau. Comme aucune exposition de ports n'est spécifiée pour les deux services "internes" il ne seront pas accessibles de l'extérieur. On peut le voir en essayant d'accéder à _localhost:80_ et _localhost:3000_ sans succès.
 
 Pour démarrer l'infrastructure en mode détaché, utiliser la commande suivante :
 ```sh
@@ -236,7 +242,7 @@ Si l'on accède à [localhost:8080/api/json](localhost:8080/api/json) les donné
 
 ## Etape 4: Requêtes AJAX avec JQuery
 
-Le code html a été modifié et une classe a été ajoutée à la balise *<p>*. Cette classe permettra de sélectionner le paragraphe et en changer les propriétés grâce au script.
+Le code du fichier `index.html` du site a été modifié et une classe a été ajoutée à la balise *<p>*. Cette classe permettra de sélectionner le paragraphe et en changer les propriétés grâce au script.
 
 ```html
 	<header id="fh5co-header" class="fh5co-cover js-fullheight" role="banner">
@@ -259,7 +265,7 @@ Le code html a été modifié et une classe a été ajoutée à la balise *<p>*.
 	</header>
 ```
 
-À la fin du fichier `index.html`, il faut bien évidemment indiquer où aller chercher le script JS.
+À la fin du fichier `index.html`, il faut bien évidemment indiquer où aller chercher le script JS qui s'occupera de mettre à jour la page.
 
 ```html
 	<!-- Custom script to load flights information -->
@@ -270,14 +276,14 @@ Le code html a été modifié et une classe a été ajoutée à la balise *<p>*.
 
 ```
 
-Le script `flight.js` suivant exécute la fonction *loadFlights()* toutes les 2 secondes. Cette dernière va récupérer les données JSON en faisant une requête GET à l'URL `/api/json/`. S'il y a des données à afficher, un message sera composé avec les données du premier vol du tableau JSON. Finalement, le text contenu dans la balise utilisant la classe `json-app` est mis à jour.
+Le script `flight.js` suivant exécute la fonction *loadFlights()* toutes les 2 secondes. Cette dernière va récupérer les données JSON en faisant une requête GET à l'URL `/api/json`. S'il y a des données à afficher, un message sera composé avec les données du premier vol du tableau JSON. Finalement, le texte contenu dans la balise utilisant la classe `json-app` est mis à jour.
 
 ```js
 $(function() {
 	console.log("Loading flights...");
 	
 	function loadFlights() {
-		$.getJSON("/api/json/", function( flights ) {
+		$.getJSON("/api/json", function( flights ) {
 			console.log(flights);
 			var message = "No flights recorded...";
 			if (flights.length > 0) {
@@ -296,7 +302,10 @@ $(function() {
 });
 ```
 
-La configuration de l'infrastructure dans le docker-compose est la même qu'à l'étape précédente. En effet, les seules modifications faites se trouvent dans les fichiers du site web. Il suffit simplement de reconstruire l'image *static* et les changements seront pris en compte.
+La configuration de l'infrastructure dans le docker-compose est la même qu'à l'étape précédente. En effet, les seules modifications faites se trouvent dans les fichiers du site web. Il suffit simplement de reconstruire l'image *static* et les changements seront pris en compte. La commande `docker compose build static` permettra de le faire. À noter qu'un simple `docker compose up -d` suffit car _Docker Compose_ détecte le changement de l'image *static*.
+
+### Sans proxy - sécurité
+Si nous n'avions pas mis de proxy, le navigateur web ne pourrait pas charger des pages web qui n'auraient pas la même origine à cause de la _Same-Origin Policy_ qui est implémentée de base dans tous les navigateurs afin d'éviter l'exécution potentielle de scripts malicieux. 
 
 ### Résultats
 
@@ -309,17 +318,17 @@ Si nous inspectons les requêtes dans l'onglet *Network* des outils développeur
 ![résultats_step4_OK](figures/step4-OK2.gif)
 
 ## Etape 5: Configuration dynamique du reverse proxy
-Les fonctionnalités demandées à cette étape ont déjà été implémentées à l'étape 3.
+Les fonctionnalités demandées à cette étape ont déjà été implémentées à l'étape 3 grâce à l'utilisation de _Docker Compose_ et de ses résaux internes.
 
 # Étapes supplémentaires
 
-Pour les prochaines étapes, nous passerons d'un proxy inversé Apache à un utilisant l'outil Traefik.
+Pour les prochaines étapes, nous passerons d'un proxy inversé Apache à un proxy implémenté par l'outil Traefik.
 
-Traefik est un reverse-proxy HTTP très moderne qui permet de gérer facilement le routage, la répartition de charge. Il dispose de plein d'autres fonctionnalités très intéressantes et utiles.
+Traefik est un reverse-proxy HTTP très moderne qui permet de gérer facilement le routage et la répartition de charge. Il dispose de plein d'autres fonctionnalités très intéressantes et utiles.
 
 ## Répartition de charge : plusieurs noeuds serveurs
 
-Nous nous basons sur l'état final de l'étape 5, c'est-à-dire que les images et le contenu des répertoires `dynamic/` et `static/` n'a pas changé.
+Nous nous basons sur l'état final de l'étape 5, c'est-à-dire que les images et le contenu des répertoires `dynamic/` et `static/` n'ont pas changé.
 
 Nous utilisons donc un fichier `docker-compose.yml`. 
 
@@ -329,28 +338,24 @@ services:
   image: "traefik:v2.5"
   command: --api.insecure=true --providers.docker
   ports:
-   - "${FRONT_HTTP_PORT:-9090}:80"
+   - "9090:80"
    - "8080:8080"
   volumes:
    - /var/run/docker.sock:/var/run/docker.sock
-
   environment:
    - TRAEFIK_PROVIDERS_DOCKER_EXPOSEDBYDEFAULT=false
-   - TRAEFIK_PROVIDERS_DOCKER=true
    - TRAEFIK_ENTRYPOINTS_FRONT=true
-   - TRAEFIK_ENTRYPOINTS_FRONT_ADDRESS=${FRONT_HTTP_PORT:-9090}
+   - TRAEFIK_ENTRYPOINTS_FRONT_ADDRESS=9090
 ```
-Nous définissons à un service qui utilisera l'image de traefik. Les commandes permettent d'activer l'interface utilisateur et de dire à traefik qu'il doit écouter les évènements et récupérer les données grâce à l'API docker. Il faut ajouter le volume `/var/run/docker.sock:/var/run/docker.sock`. Le port forwarding "8080:8080" permet d'accéder à l'interface de gestion via [localhost:8080](localhost:8080) et "9090:80" servira à se rendre sur le [site web](localhost:9090).
+Nous définissons un service qui utilisera l'image de traefik. Les commandes permettent d'activer l'interface utilisateur et de dire à traefik qu'il doit écouter les évènements et récupérer les données grâce à l'API docker. Il faut pour cela ajouter le volume `/var/run/docker.sock:/var/run/docker.sock`. Le port forwarding "8080:8080" permet d'accéder à l'interface de gestion via [localhost:8080](localhost:8080) et "9090:80" servira à se rendre sur le [site web](localhost:9090).
 
 Puis, nous ajoutons des variables d'environnement pour désactiver l'exposition par défaut, activer l'utilisation de docker comme provider, activer un entrypoint front et spécifier le port d'accès à cet entrypoint.
-
-^ À revoir ... ^
 
 ```yml
 deploy:
  replicas: 2
 ```
-Cela permet de démarrer deux containers avec la même image.
+Cela permet de démarrer deux containers avec la même image. On pourrait également ne pas mettre ces deux lignes et mettre `--scale static=2` et `--scale dynamic=2` dans la commande _Docker Compose_.
 
 ```yml
   labels: 
@@ -368,13 +373,7 @@ Le service est exposé à traefik (pour qu'il puisse le gérer dynamiquement), p
    - traefik.http.routers.dynamic.middlewares=dynamic-replacepath
    - traefik.http.middlewares.dynamic-replacepath.replacepath.path=/
 ```
-Les règle sont relativement similaires pour le service dynamic, mais cette fois lorsqu'une requête est envoyé à /api/json, le routeur va la modifier pour qu'elle soit redirigée à la racine du service.
-
-```yml
-  environment:
-  - PORT=3000
-```
-Je ne sais plus pourquoi cette variable d'environnement est nécessaire...
+Les règles sont relativement similaires pour le service _dynamic_, mais cette fois lorsqu'une requête est envoyée à `/api/json`, le routeur va la modifier à l'aide d'un middleware pour qu'elle soit redirigée à la racine du service.
 
 **Fichier final:**
 ```yml
@@ -385,16 +384,15 @@ services:
   image: "traefik:v2.5"
   command: --api.insecure=true --providers.docker
   ports:
-   - "${FRONT_HTTP_PORT:-9090}:80"
+   - "9090:80"
    - "8080:8080"
   volumes:
    - /var/run/docker.sock:/var/run/docker.sock
 
   environment:
    - TRAEFIK_PROVIDERS_DOCKER_EXPOSEDBYDEFAULT=false
-   - TRAEFIK_PROVIDERS_DOCKER=true
    - TRAEFIK_ENTRYPOINTS_FRONT=true
-   - TRAEFIK_ENTRYPOINTS_FRONT_ADDRESS=${FRONT_HTTP_PORT:-9090}
+   - TRAEFIK_ENTRYPOINTS_FRONT_ADDRESS=9090
 
  static:
   build: ./static
@@ -434,14 +432,14 @@ De même pour les serveurs statiques, c'est certes très rapide, mais nous voyon
 
 ## Répartition de charge : round-robin vs sticky sessions
 
-Deux labels ont été rajoutés dans chaque service pour activer les sticky sessions :
+Deux labels ont été rajoutés dans chaque service (static et dynamic) pour activer les sticky sessions :
 
 ```yml
    - traefik.http.services.dynamic.loadbalancer.sticky=true
    - traefik.http.services.dynamic.loadbalancer.sticky.cookie.name=<Nom_désiré>
 ```
 
-L'infrastructure peut être démarrée avec `docker compose up -d`.
+L'infrastructure peut être démarrée avec `docker compose up`.
 
 ### Résultats
 
@@ -472,14 +470,16 @@ docker compose up -d --scale static=3 --no-recreate --scale dynamic=5 --no-recre
 ```
 Cela aura pour effet d'ajouter 2 containers au service dynamic sans recréer les anciens déjà lancés.
 
+| :warning: 	| Bug possible avec le flag *--no-recreate* |
+| :-----------:	| ------------- |
+| Lien 		| [https://github.com/docker/compose/issues/8940](https://github.com/docker/compose/issues/8940)  |
+| Solution possible | Redémarrer le service docker `systemctl restart docker.service` et réessayer |
+
 ### Résultats
 
-En spécifiant un nouveau nombre d'instances d'un service, docker va recréer les containers du service dynamic qui étaient déjà présents et créer 1 nouveau container qu'il rajoutera à
-
-// TODO  Changer gif avec recreate ...
+En spécifiant un nouveau nombre d'instances d'un service, docker va recréer les containers du service dynamic qui étaient déjà présents et créer 1 nouveau container qu'il rajoutera à l'infrastructure.
 
 ![résultats_step8_OK](figures/step8-OK.gif)
-
 
 ## Interface de gestion utilisateur
 
@@ -490,8 +490,6 @@ Nous avons simplement ajouté un nouveau service dans le fichier docker-compose 
   image: portainer/portainer-ce:latest
   container_name: portainer
   restart: unless-stopped
-  security_opt:
-    - no-new-privileges:true
   volumes:
     - /etc/localtime:/etc/localtime:ro
     - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -505,7 +503,9 @@ L'infrastructure peut être démarrée avec `docker compose up -d --scale static
 
 ### Résultats
 
-En accédant à l'adresse [localhost:9000](http://localhost:9000), le portail portainer s'afficher, il est possible de créer un mot de passe pour le compte admin. Une fois cela fait, dans l'onglet Home, il est possible de sélectionner l'environnement local et d'obtenir des informations sur celui-ci.
+En accédant à l'adresse [localhost:9000](http://localhost:9000), le portail portainer s'affiche, il est possible de créer un mot de passe pour le compte admin. Une fois cela fait, dans l'onglet Home, il est possible de sélectionner l'environnement local et d'obtenir des informations sur celui-ci.
+
+Dans un cas de production le container Portainer serait soit lancé individuellement, soit même installé en dur sur le noeud. Ceci permet de configurer Portainer une fois au début et ensuite juste se connecter avec l'utilisateur/mot de passe défini. On pourrait mapper le dossier `/data` de Portainer sur un dossier de l'hôte pour sauvegarder les configurations. Il faudra par contre aussi mapper le dossier courant afin que Portainer puisse accéder aux fichiers si l'on souhaite lancer des containers depuis là.
 
 ![résultats_step9_OK](figures/step9-OK.gif)
 

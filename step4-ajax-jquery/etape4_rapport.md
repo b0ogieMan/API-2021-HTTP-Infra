@@ -43,7 +43,7 @@ $(function() {
 	console.log("Loading flights...");
 	
 	function loadFlights() {
-		$.getJSON("/api/json/", function( flights ) {
+		$.getJSON("/api/json", function( flights ) {
 			console.log(flights);
 			var message = "No flights recorded...";
 			if (flights.length > 0) {
@@ -61,7 +61,7 @@ $(function() {
 	setInterval(loadFlights, 2000);
 });
 ```
-Quand le fichier est chargé, la fonction loadFlights est appelée toutes les 2 secondes. Cette fonction récupère les données JSON retournée par la page */api/json/*, elle sélectionne le premier vol dans le tableau reçu et compose une chaîne de caractères avec les données. Elle modifie ensuite le texte contenu dans la balise ayant comme classe *json-app*.
+Quand le fichier est chargé, la fonction loadFlights est appelée toutes les 2 secondes. Cette fonction récupère les données JSON retournée par la page */api/json*, elle sélectionne le premier vol dans le tableau reçu et compose une chaîne de caractères avec les données. Elle modifie ensuite le texte contenu dans la balise ayant comme classe *json-app*.
 
 Une fois cela fait, effectuer les commandes suivantes s'être assurée qu'aucun vieux conteneur n'existe :
 ```
